@@ -1,0 +1,8 @@
+﻿{
+  "name": "pillsgood.unity.extensions",
+  "displayName": "Unity Extensions",
+  "version": "1.0.0",
+  "dependencies": {
+    "com.unity.settings-manager": "2.0.1"
+  }
+}
