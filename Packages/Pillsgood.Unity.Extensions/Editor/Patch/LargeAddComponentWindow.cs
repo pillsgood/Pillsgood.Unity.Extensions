@@ -10,6 +10,18 @@ namespace Pillsgood.Unity.Extensions.Editor.Patch
     [HarmonyPatch]
     internal static class LargeAddComponentWindow
     {
+        private class Options : UserOptions
+        {
+            [UserSetting("Add Component Window", "Enabled")]
+            public static readonly ISetting<bool> Enabled = Create("extensions.component_window.enabled", true);
+
+            [UserSetting("Add Component Window", "Width Modifier")]
+            public static readonly ISetting<float> WidthModifier = Create("extensions.component_window.width_modifier", 3f);
+
+            [UserSetting("Add Component Window", "Height Modifier")]
+            public static readonly ISetting<float> HeightModifier = Create("extensions.component_window.height_modifier", 1.5f);
+        }
+
         [HarmonyPostfix]
         [HarmonyPatch("UnityEditor.AddComponent.AddComponentWindow", "CalculateWindowSize")]
         private static void Postfix_AddComponentWindow_CalculateWindowSize(ref Vector2 __result)
@@ -37,34 +49,6 @@ namespace Pillsgood.Unity.Extensions.Editor.Patch
             if (windowSize.x > buttonRect.width)
             {
                 buttonRect.x += (buttonRect.width - windowSize.x) / 2f;
-            }
-        }
-
-        internal class Options : UserOptions
-        {
-            [UserSetting("Add Component Window", "Enabled")]
-            public static readonly ISetting<bool> Enabled = Create("extensions.component_window.enabled", true, OnEnabled);
-
-            [UserSetting("Add Component Window", "Width Modifier")]
-            public static readonly ISetting<float> WidthModifier = Create("extensions.component_window.width_modifier", 3f);
-
-            [UserSetting("Add Component Window", "Height Modifier")]
-            public static readonly ISetting<float> HeightModifier = Create("extensions.component_window.height_modifier", 1.5f);
-
-            private static void OnEnabled(bool enable)
-            {
-                if (enable)
-                {
-                    Extensions.Harmony(harmony =>
-                    {
-                        if (harmony.GetPatchedMethods().Any(x => x.DeclaringType?.Name is "AddComponentWindow"))
-                        {
-                            return;
-                        }
-
-                        harmony.CreateClassProcessor(typeof(LargeAddComponentWindow)).Patch();
-                    });
-                }
             }
         }
     }
