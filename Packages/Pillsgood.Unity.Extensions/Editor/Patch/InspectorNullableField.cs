@@ -20,7 +20,7 @@ namespace Pillsgood.Unity.Extensions.Editor.Patch
 
         [HarmonyReversePatch]
         [HarmonyPatch("UnityEditor.ScriptAttributeUtility", nameof(GetFieldInfoFromProperty))]
-        private static FieldInfo? GetFieldInfoFromProperty(SerializedProperty property, out Type type)
+        private static FieldInfo? GetFieldInfoFromProperty(SerializedProperty property, out Type? type)
         {
             throw new InvalidOperationException();
         }
@@ -35,10 +35,8 @@ namespace Pillsgood.Unity.Extensions.Editor.Patch
             }
 
             var fieldInfo = GetFieldInfoFromProperty(__instance, out var type);
-            if (type.IsValueType)
-            {
-                return;
-            }
+            if (type is null) return;
+            if (type.IsValueType) return;
 
             if (fieldInfo != null && IsNullableMember(fieldInfo))
             {
