@@ -1,6 +1,4 @@
-﻿using System;
-using HarmonyLib;
-using Pillsgood.Unity.Extensions.Editor.Patch;
+﻿using HarmonyLib;
 using UnityEditor.Callbacks;
 using UnityEngine;
 
