@@ -4,6 +4,7 @@ using HarmonyLib;
 using JetBrains.Annotations;
 using Pillsgood.Unity.Extensions.Editor.Preferences;
 using UnityEditor;
+using UnityEditor.Compilation;
 using UnityEditor.SettingsManagement;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -18,7 +19,7 @@ namespace Pillsgood.Unity.Extensions.Editor.Patch
             private const string Category = "Inspector Title Bar";
 
             [UserSetting(Category, "Enabled")]
-            public static readonly ISetting<bool> Enabled = Create("extensions.titlebar.enabled", true);
+            public static readonly ISetting<bool> Enabled = Create("extensions.titlebar.enabled", true, OnEnabled);
 
             [UserSetting(Category, "Height")]
             public static readonly ISetting<float> Height = Create("extensions.titlebar.fixed_height", 40f);
@@ -31,6 +32,11 @@ namespace Pillsgood.Unity.Extensions.Editor.Patch
 
             [UserSetting(Category, "Namespace Font Color")]
             public static readonly ISetting<Color> NamespaceFontColor = Create("extensions.titlebar.ns_font_color", (Color)new Color32(0x9d, 0x9d, 0x9d, 0xff));
+
+            private static void OnEnabled(bool _)
+            {
+                CompilationPipeline.RequestScriptCompilation();
+            }
         }
 
         [HarmonyReversePatch]
