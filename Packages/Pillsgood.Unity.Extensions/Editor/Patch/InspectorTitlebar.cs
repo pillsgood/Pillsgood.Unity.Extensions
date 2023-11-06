@@ -77,8 +77,11 @@ namespace Pillsgood.Unity.Extensions.Editor.Patch
         [HarmonyPatch(typeof(ObjectNames), nameof(ObjectNames.GetInspectorTitle), typeof(Object), typeof(bool))]
         private static void Postfix_ObjectNames_GetInspectorTitle(
             ref string __result,
+            Object obj,
             bool __state)
         {
+            if (obj is ScriptableObject) return;
+
             if (!__state) __result = $"<b>{__result}</b>";
         }
 
