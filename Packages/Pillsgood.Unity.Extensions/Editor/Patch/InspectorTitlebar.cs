@@ -22,7 +22,7 @@ namespace Pillsgood.Unity.Extensions.Editor.Patch
             private const string Category = "Inspector Title Bar";
 
             [UserSetting(Category, "Enabled")]
-            public static readonly ISetting<bool> Enabled = Create("extensions.titlebar.enabled", true, OnEnabled);
+            public static readonly ISetting<bool> Enabled = Create("extensions.titlebar.enabled", true);
 
             [UserSetting(Category, "Height")]
             public static readonly ISetting<float> Height = Create("extensions.titlebar.fixed_height", 40f);
@@ -36,10 +36,11 @@ namespace Pillsgood.Unity.Extensions.Editor.Patch
             [UserSetting(Category, "Namespace Font Color")]
             public static readonly ISetting<Color> NamespaceFontColor = Create("extensions.titlebar.ns_font_color", (Color)new Color32(0x9d, 0x9d, 0x9d, 0xff));
 
-            private static void OnEnabled(bool _)
-            {
-                CompilationPipeline.RequestScriptCompilation();
-            }
+            [UserSetting(Category, "Show Namespace For Well Known Types")]
+            public static readonly ISetting<bool> ShowNamespaceForWellKnownTypes = Create("extensions.titlebar.show_ns_for_well_known_types", false);
+
+            [UserSetting(Category, "Match Height For Well Known Types")]
+            public static readonly ISetting<bool> MatchHeightForWellKnownTypes = Create("extensions.titlebar.match_height_for_well_known_types", true);
         }
 
         [HarmonyReversePatch]
@@ -61,32 +62,59 @@ namespace Pillsgood.Unity.Extensions.Editor.Patch
         private static bool Prefix_ObjectNames_GetInspectorTitle(
             ref string __result,
             Object obj,
-            bool multiObjectEditing,
-            out bool __state)
+            bool multiObjectEditing)
         {
-            __state = false;
             if (!Options.Enabled.Value) return true;
 
-            if (obj is MonoBehaviour monoBehaviour)
+            if (ShouldShowNamespaceForType(obj))
             {
-                var type = monoBehaviour.GetType();
+                var type = obj.GetType();
+                __result = $"<b>{GetTypeName(type)}</b>";
 
-                if (TryGetInspectorTitle(type, out _)) return true;
+                var color = ColorUtility.ToHtmlStringRGB(Options.NamespaceFontColor.Value);
+                var fontSize = Options.NamespaceFontSize.Value;
+                __result += $"\n<color=#{color}><size={fontSize}>{type.Namespace}</size></color>";
 
-                __result = $"<b>{type.Name}</b>";
-
-                if (Options.ShowNamespace.Value)
-                {
-                    var color = ColorUtility.ToHtmlStringRGB(Options.NamespaceFontColor.Value);
-                    var fontSize = Options.NamespaceFontSize.Value;
-                    __result += $"\n<color=#{color}><size={fontSize}>{type.Namespace}</size></color>";
-                }
-
-                __state = !string.IsNullOrEmpty(__result);
-                return !__state;
+                return string.IsNullOrEmpty(__result);
             }
 
             return true;
+        }
+
+        private static string GetTypeName(Type type)
+        {
+            if (Options.ShowNamespaceForWellKnownTypes.Value &&
+                TryGetInspectorTitle(type, out var title))
+            {
+                return title;
+            }
+
+            return type.Name;
+        }
+
+        private static bool ShouldShowNamespaceForType(Object? obj)
+        {
+            if (!Options.ShowNamespace.Value)
+            {
+                return false;
+            }
+
+            Func<Object?, bool> test = Options.ShowNamespaceForWellKnownTypes.Value
+                ? static obj => obj is Behaviour
+                : static obj => obj is MonoBehaviour;
+
+            if (test(obj))
+            {
+                if (Options.ShowNamespaceForWellKnownTypes.Value)
+                {
+                    return true;
+                }
+
+                var type = obj!.GetType();
+                return !TryGetInspectorTitle(type, out _);
+            }
+
+            return false;
         }
 
         [HarmonyPatch(typeof(EditorGUI), "DoInspectorTitlebar")]
@@ -139,12 +167,14 @@ namespace Pillsgood.Unity.Extensions.Editor.Patch
             if (!Options.Enabled.Value) return style;
 
             var obj = objs.FirstOrDefault();
-            if (obj is MonoBehaviour monoBehaviour)
+
+            if (obj is Transform) return style;
+
+            var shouldMatchHeight = Options.MatchHeightForWellKnownTypes.Value;
+            var shouldShowNamespaceForType = ShouldShowNamespaceForType(obj);
+
+            if (shouldMatchHeight || shouldShowNamespaceForType)
             {
-                var type = monoBehaviour.GetType();
-
-                if (TryGetInspectorTitle(type, out _)) return style;
-
                 return new GUIStyle(style)
                 {
                     fixedHeight = Options.Height.Value
@@ -159,21 +189,34 @@ namespace Pillsgood.Unity.Extensions.Editor.Patch
             if (!Options.Enabled.Value) return style;
 
             var obj = objects.FirstOrDefault();
-            if (obj is MonoBehaviour monoBehaviour)
+
+            if (obj is Transform) return style;
+
+            var shouldMatchHeight = Options.MatchHeightForWellKnownTypes.Value;
+            var shouldShowNamespaceForType = ShouldShowNamespaceForType(obj);
+            if (!shouldMatchHeight && !shouldShowNamespaceForType)
             {
-                var type = monoBehaviour.GetType();
-
-                if (TryGetInspectorTitle(type, out _)) return style;
-
-
-                return new GUIStyle(style)
-                {
-                    fixedHeight = Options.Height.Value - 2,
-                    fontStyle = FontStyle.Normal
-                };
+                return style;
             }
 
-            return style;
+            var fixedHeight = style.fixedHeight;
+            var fontStyle = style.fontStyle;
+
+            if (shouldShowNamespaceForType)
+            {
+                fontStyle = FontStyle.Normal;
+            }
+
+            if (shouldMatchHeight || shouldShowNamespaceForType)
+            {
+                fixedHeight = Options.Height.Value - 2;
+            }
+
+            return new GUIStyle(style)
+            {
+                fixedHeight = fixedHeight,
+                fontStyle = fontStyle
+            };
         }
     }
 }
