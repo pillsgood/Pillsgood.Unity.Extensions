@@ -1,13 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Reflection;
 using System.Reflection.Emit;
 using HarmonyLib;
 using JetBrains.Annotations;
 using Pillsgood.Unity.Extensions.Editor.Preferences;
 using UnityEditor;
-using UnityEditor.Compilation;
 using UnityEditor.SettingsManagement;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -43,8 +44,8 @@ namespace Pillsgood.Unity.Extensions.Editor.Patch
             public static readonly ISetting<bool> MatchHeightForWellKnownTypes = Create("extensions.titlebar.match_height_for_well_known_types", true);
         }
 
-        [HarmonyReversePatch]
         [HarmonyPatch("UnityEditor.ObjectNames+InspectorTitles", "TryGet")]
+        [HarmonyReversePatch, UsedImplicitly]
         private static bool TryGetInspectorTitle(Type objectType, out string title)
         {
             throw new InvalidOperationException();
@@ -55,30 +56,6 @@ namespace Pillsgood.Unity.Extensions.Editor.Patch
         private static GUIStyle GetInspectorTitlebar()
         {
             throw new InvalidOperationException();
-        }
-
-        [HarmonyPrefix, UsedImplicitly]
-        [HarmonyPatch(typeof(ObjectNames), nameof(ObjectNames.GetInspectorTitle), typeof(Object), typeof(bool))]
-        private static bool Prefix_ObjectNames_GetInspectorTitle(
-            ref string __result,
-            Object obj,
-            bool multiObjectEditing)
-        {
-            if (!Options.Enabled.Value) return true;
-
-            if (ShouldShowNamespaceForType(obj))
-            {
-                var type = obj.GetType();
-                __result = $"<b>{GetTypeName(type)}</b>";
-
-                var color = ColorUtility.ToHtmlStringRGB(Options.NamespaceFontColor.Value);
-                var fontSize = Options.NamespaceFontSize.Value;
-                __result += $"\n<color=#{color}><size={fontSize}>{type.Namespace}</size></color>";
-
-                return string.IsNullOrEmpty(__result);
-            }
-
-            return true;
         }
 
         private static string GetTypeName(Type type)
@@ -118,7 +95,7 @@ namespace Pillsgood.Unity.Extensions.Editor.Patch
         }
 
         [HarmonyPatch(typeof(EditorGUI), "DoInspectorTitlebar")]
-        [HarmonyTranspiler]
+        [HarmonyTranspiler, UsedImplicitly]
         private static IEnumerable<CodeInstruction> Transpile_EditorGUI_DoInspectorTitlebar(
             IEnumerable<CodeInstruction> instructions)
         {
@@ -128,6 +105,8 @@ namespace Pillsgood.Unity.Extensions.Editor.Patch
             yield return CodeInstruction.Call(
                 (Expression<Func<Object[], GUIStyle, GUIStyle>>)((objs, style) => UpdateInspectorTitlebar(objs, style)));
             yield return new CodeInstruction(OpCodes.Starg_S, 5);
+
+            var getTitleMethod = AccessTools.Method(typeof(ObjectNames), nameof(ObjectNames.GetInspectorTitle), new[] { typeof(Object), typeof(bool) });
 
             foreach (var instruction in instructions)
             {
@@ -142,15 +121,49 @@ namespace Pillsgood.Unity.Extensions.Editor.Patch
                     continue;
                 }
 
+                if (instruction.opcode == OpCodes.Call && instruction.operand is MethodInfo methodInfo && methodInfo == getTitleMethod)
+                {
+                    yield return instruction;
+
+                    yield return new CodeInstruction(OpCodes.Ldarg_3);
+                    yield return new CodeInstruction(OpCodes.Ldc_I4_0);
+                    yield return new CodeInstruction(OpCodes.Ldelem_Ref); // targetObjs[0]
+
+                    yield return CodeInstruction.Call(
+                        (Expression<Func<string, Object, string>>)((title, obj) => GetAdvancedInspectorTitle(title, obj)));
+
+                    continue;
+                }
+
                 yield return instruction;
             }
         }
 
+        private static string GetAdvancedInspectorTitle(string title, Object obj)
+        {
+            if (!Options.Enabled.Value) return title;
+
+            if (ShouldShowNamespaceForType(obj))
+            {
+                var type = obj.GetType();
+                var result = $"<b>{GetTypeName(type)}</b>";
+
+                var color = ColorUtility.ToHtmlStringRGB(Options.NamespaceFontColor.Value);
+                var fontSize = Options.NamespaceFontSize.Value;
+                result += $"\n<color=#{color}><size={fontSize}>{type.Namespace}</size></color>";
+
+                return result;
+            }
+
+            return title;
+        }
+
+        [SuppressMessage("ReSharper", "RedundantAssignment")]
         [HarmonyPatch(
             typeof(EditorGUILayout),
             nameof(EditorGUILayout.InspectorTitlebar),
             typeof(bool), typeof(UnityEditor.Editor))]
-        [HarmonyPrefix]
+        [HarmonyPrefix, UsedImplicitly]
         private static bool Prefix_EditorGUILayout_InspectorTitlebar(
             ref bool __result,
             bool foldout,
