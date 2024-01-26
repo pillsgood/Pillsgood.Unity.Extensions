@@ -22,11 +22,9 @@ namespace Pillsgood.Unity.Extensions.Editor.Patch
         {
             private const string Category = "Inspector Title Bar";
 
-            [UserSetting(Category, "Enabled")]
-            public static readonly ISetting<bool> Enabled = Create("extensions.titlebar.enabled", true);
+            [UserSetting(Category, "Enabled")] public static readonly ISetting<bool> Enabled = Create("extensions.titlebar.enabled", true);
 
-            [UserSetting(Category, "Height")]
-            public static readonly ISetting<float> Height = Create("extensions.titlebar.fixed_height", 40f);
+            [UserSetting(Category, "Height")] public static readonly ISetting<float> Height = Create("extensions.titlebar.fixed_height", 40f);
 
             [UserSetting(Category, "Show Namespace")]
             public static readonly ISetting<bool> ShowNamespace = Create("extensions.titlebar.show_namespace", true);
@@ -67,6 +65,11 @@ namespace Pillsgood.Unity.Extensions.Editor.Patch
             }
 
             return type.Name;
+        }
+
+        private static bool ShouldChangeHeightForType(Object? obj)
+        {
+            return obj is not StateMachineBehaviour;
         }
 
         private static bool ShouldShowNamespaceForType(Object? obj)
@@ -186,7 +189,7 @@ namespace Pillsgood.Unity.Extensions.Editor.Patch
             var shouldMatchHeight = Options.MatchHeightForWellKnownTypes.Value;
             var shouldShowNamespaceForType = ShouldShowNamespaceForType(obj);
 
-            if (shouldMatchHeight || shouldShowNamespaceForType)
+            if ((shouldMatchHeight || shouldShowNamespaceForType) && ShouldChangeHeightForType(obj))
             {
                 return new GUIStyle(style)
                 {
@@ -220,7 +223,7 @@ namespace Pillsgood.Unity.Extensions.Editor.Patch
                 fontStyle = FontStyle.Normal;
             }
 
-            if (shouldMatchHeight || shouldShowNamespaceForType)
+            if ((shouldMatchHeight || shouldShowNamespaceForType) && ShouldChangeHeightForType(obj))
             {
                 fixedHeight = Options.Height.Value - 2;
             }
